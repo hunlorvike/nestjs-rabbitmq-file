@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  postgres-db:
+    container_name: postgres-rabbitmq-db-container
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: user_rabbitmq_file
+      POSTGRES_PASSWORD: pass_rabbitmq_file
+      POSTGRES_DB: postgres_rabbitmq_file
+    ports:
+      - '5678:5432'
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    restart: always
+<<<<<<< HEAD
+=======
+
+  redis:
+    image: redis:alpine
+    container_name: redis-container
+    restart: unless-stopped
+    expose:
+      - 6380
+    ports:
+      - '6380:6380'
+    volumes:
+      - ./redis-data:/data
+    security_opt:
+      - seccomp:unconfined
+>>>>>>> a5b0088689c36febe44bd44ee5c1e880ce0ff251
