@@ -10,16 +10,7 @@ export class FileUploadService implements IFileUploadService {
     ) { }
 
     async uploadFile(file: Express.Multer.File): Promise<string> {
-        const message = {
-            originalname: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-        };
-
-        await this.rabbitmqService.sendMessage(message);
-
-        const result = "File processed successfully";
-
+        const result = await this.rabbitmqService.uploadFile(file);
         return Promise.resolve(result);
     }
 }
