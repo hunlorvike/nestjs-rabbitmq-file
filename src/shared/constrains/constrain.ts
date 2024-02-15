@@ -1,4 +1,5 @@
 export enum Queues {
+    FILE_QUEUE = 'file-queue',
     UPLOAD = 'upload-file',
     DOWNLOAD = 'download-file',
 }

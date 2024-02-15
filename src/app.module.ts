@@ -7,7 +7,7 @@ import { dataSourceOptions } from './database/data-source';
 import { RabbitmqModule } from './modules/rabbitmq/rabbitmq.module';
 import { FileUploadModule } from './modules/upload/file-upload.module';
 import { ResponseInterceptor } from './shared/interceptors/response.interceptor';
-import { Services } from './shared/constrains/constrain';
+import { Queues, Services } from './shared/constrains/constrain';
 
 @Module({
 	imports: [
@@ -21,23 +21,8 @@ import { Services } from './shared/constrains/constrain';
 			provide: APP_INTERCEPTOR,
 			useClass: ResponseInterceptor,
 		},
-		{
-			provide: Services.CLIENT_PROXY,
-			useFactory: () => {
-				const options: RmqOptions = {
-					transport: Transport.RMQ,
-					options: {
-						urls: ['amqp://localhost:5672'],
-						queue: 'file-queue',
-						queueOptions: {
-							durable: false,
-						},
-					},
-				};
-				return ClientProxyFactory.create(options);
-			},
-		},
+
 	],
-	exports: [Services.CLIENT_PROXY],
+	exports: [],
 })
 export class AppModule { }

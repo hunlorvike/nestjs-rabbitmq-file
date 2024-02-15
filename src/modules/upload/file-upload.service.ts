@@ -1,16 +1,22 @@
-import { Inject, Injectable } from "@nestjs/common";
+// file-upload.service.ts
+import { Injectable } from "@nestjs/common";
+import { RabbitmqService } from "../rabbitmq/rabbitmq.service";
 import { IFileUploadService } from "./i-file-upload.service";
 
 @Injectable()
 export class FileUploadService implements IFileUploadService {
     constructor(
+        private readonly rabbitmqService: RabbitmqService,
     ) { }
 
-    uploadFile(file: Express.Multer.File): Promise<string> {
-        console.log("File information:");
-        console.log("Original name:", file.originalname);
-        console.log("MIME type:", file.mimetype);
-        console.log("Size:", file.size);
+    async uploadFile(file: Express.Multer.File): Promise<string> {
+        const message = {
+            originalname: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+        };
+
+        await this.rabbitmqService.sendMessage(message);
 
         const result = "File processed successfully";
 
