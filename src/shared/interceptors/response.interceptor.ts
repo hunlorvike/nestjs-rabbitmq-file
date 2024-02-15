@@ -7,6 +7,12 @@ import {
 } from '@nestjs/common';
 import { map } from 'rxjs/operators';
 
+interface ResponseData {
+    data: any;
+    code: number;
+    msg: string | null;
+}
+
 @Injectable()
 export class ResponseInterceptor implements NestInterceptor {
     intercept(
@@ -14,7 +20,7 @@ export class ResponseInterceptor implements NestInterceptor {
         next: CallHandler<any>,
     ): import('rxjs').Observable<any> | Promise<import('rxjs').Observable<any>> {
         return next.handle().pipe(
-            map(content => {
+            map((content: ResponseData) => {
                 return {
                     data: content.data || {},
                     code: content.code || HttpStatus.OK,

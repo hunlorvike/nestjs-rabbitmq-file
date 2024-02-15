@@ -1,7 +1,7 @@
 import { Injectable, HttpException, HttpStatus } from "@nestjs/common";
 import { connect, Channel, Connection } from 'amqplib';
 import { Queues } from "../../shared/constrains/constrain";
-import { createReadStream, existsSync, promises as fsPromises, mkdirSync } from 'fs';
+import { createReadStream, createWriteStream, existsSync, promises as fsPromises, mkdirSync } from 'fs';
 import { Express } from 'express';
 import { dirname, join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,12 +14,14 @@ export class RabbitmqService {
     private isProcessing: boolean;
     private maxConcurrentProcessing: number;
     private maxRetryAttempts: number;
+    private currentWorkers: number;
 
     constructor() {
         this.init();
         this.processingQueue = [];
         this.isProcessing = false;
-        this.maxConcurrentProcessing = 10;
+        this.maxConcurrentProcessing = 2; // Set the maximum number of concurrent processing workers
+        this.currentWorkers = 0;
         this.maxRetryAttempts = 3;
     }
 
@@ -33,7 +35,7 @@ export class RabbitmqService {
         }
     }
 
-    async uploadFile(file: Express.Multer.File): Promise<string> {
+    async uploadFile(file: Express.Multer.File): Promise<{ message: string, status: number, filename: string }> {
         let retryAttempts = 0;
 
         while (retryAttempts < this.maxRetryAttempts) {
@@ -50,11 +52,18 @@ export class RabbitmqService {
                     mkdirSync(directory, { recursive: true });
                 }
 
-                await fsPromises.writeFile(filePath, file.buffer);
+                const writeStream = createWriteStream(filePath);
+
+                writeStream.write(file.buffer);
+                writeStream.end();
 
                 await this.enqueueFile(filePath);
 
-                return "File processing request received";
+                return {
+                    message: "File processing request received",
+                    status: HttpStatus.ACCEPTED,
+                    filename: fileName
+                };
             } catch (error) {
                 console.error('Error while uploading file:', error);
 
@@ -76,8 +85,10 @@ export class RabbitmqService {
     }
 
     private async processFiles(): Promise<void> {
-        if (!this.isProcessing && this.processingQueue.length > 0) {
+        if (!this.isProcessing && this.processingQueue.length > 0 && this.currentWorkers < this.maxConcurrentProcessing) {
             this.isProcessing = true;
+            this.currentWorkers++;
+
             const { filePath, resolve } = this.processingQueue.shift();
 
             try {
@@ -99,6 +110,8 @@ export class RabbitmqService {
                 console.error('Error while processing file:', error);
             } finally {
                 this.isProcessing = false;
+                this.currentWorkers--;
+
                 this.processFiles();
             }
         }

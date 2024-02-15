@@ -21,16 +21,15 @@ export class FileUploadController {
         description: 'File upload',
         type: FileUploadDto,
     })
-    async uploadFile(@UploadedFile() file: Express.Multer.File): Promise<{ data: string }> {
+    async uploadFile(@UploadedFile() file: Express.Multer.File): Promise<{ data: string, code: number, status: HttpStatus }> {
         try {
-            console.log(file);
-
             if (!file) {
                 throw new HttpException('File not provided', HttpStatus.BAD_REQUEST);
             }
 
             const result = await this.uploadService.uploadFile(file);
-            return { data: result };
+
+            return { data: result.message, code: result.status, status: HttpStatus.OK };
         } catch (error) {
             throw new HttpException(error.message || 'Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
         }
