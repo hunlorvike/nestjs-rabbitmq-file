@@ -20,7 +20,7 @@ export class RabbitmqService {
         this.init();
         this.processingQueue = [];
         this.isProcessing = false;
-        this.maxConcurrentProcessing = 2; // Set the maximum number of concurrent processing workers
+        this.maxConcurrentProcessing = 2;
         this.currentWorkers = 0;
         this.maxRetryAttempts = 3;
     }
@@ -40,11 +40,8 @@ export class RabbitmqService {
 
         while (retryAttempts < this.maxRetryAttempts) {
             try {
-                if (!file) {
-                    throw new HttpException('File not provided', HttpStatus.BAD_REQUEST);
-                }
 
-                const fileName = uuidv4() + '-' + file.originalname;
+                const fileName = this.generateUniqueFileName(file.originalname);
                 const filePath = join(__dirname, '../../../', 'public', fileName);
 
                 const directory = dirname(filePath);
@@ -75,6 +72,13 @@ export class RabbitmqService {
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
+    }
+
+    private generateUniqueFileName(originalFilename: string): string {
+        const timestamp = new Date().getTime();
+        const randomString = Math.random().toString(36).substring(7);
+        const uniqueName = `${timestamp}_${randomString}_${originalFilename}`;
+        return uniqueName.replace(/[^a-zA-Z0-9_.]/g, "_");
     }
 
     private async enqueueFile(filePath: string): Promise<void> {

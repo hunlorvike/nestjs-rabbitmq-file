@@ -21,7 +21,7 @@ export class FileUploadController {
         description: 'File upload',
         type: FileUploadDto,
     })
-    async uploadFile(@UploadedFile() file: Express.Multer.File): Promise<{ data: string, code: number, status: HttpStatus }> {
+    async uploadFile(@UploadedFile() file: Express.Multer.File): Promise<{ data: any, code: number, msg: string }> {
         try {
             if (!file) {
                 throw new HttpException('File not provided', HttpStatus.BAD_REQUEST);
@@ -29,7 +29,7 @@ export class FileUploadController {
 
             const result = await this.uploadService.uploadFile(file);
 
-            return { data: result.message, code: result.status, status: HttpStatus.OK };
+            return { data: result.filename, code: result.status, msg: result.message };
         } catch (error) {
             throw new HttpException(error.message || 'Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
         }
