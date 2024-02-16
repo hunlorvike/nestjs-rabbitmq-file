@@ -25,8 +25,12 @@ export class FileUploadService implements IFileUploadService {
 
             return result;
         } catch (error) {
-            this.logger.error(`Error while uploading file: ${error.message}`, error.stack);
-            throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+            this.handleUploadError(error);
         }
+    }
+
+    private handleUploadError(error: Error): void {
+        this.logger.error(`Error while uploading file: ${error.message}`, error.stack);
+        throw new HttpException('Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
     }
 }

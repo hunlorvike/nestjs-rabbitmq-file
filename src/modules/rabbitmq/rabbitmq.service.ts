@@ -32,6 +32,7 @@ export class RabbitmqService {
             await this.channel.assertQueue(Queues.FILE_QUEUE, { durable: false });
         } catch (error) {
             console.error('Error while initializing connection and channel:', error);
+            throw new HttpException('Failed to initialize connection and channel', HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -40,7 +41,6 @@ export class RabbitmqService {
 
         while (retryAttempts < this.maxRetryAttempts) {
             try {
-
                 const fileName = this.generateUniqueFileName(file.originalname);
                 const filePath = join(__dirname, '../../../', 'public', fileName);
 
@@ -50,7 +50,6 @@ export class RabbitmqService {
                 }
 
                 const writeStream = createWriteStream(filePath);
-
                 writeStream.write(file.buffer);
                 writeStream.end();
 
@@ -62,25 +61,26 @@ export class RabbitmqService {
                     filename: fileName
                 };
             } catch (error) {
-                console.error('Error while uploading file:', error);
+                console.error(`Error while uploading file: ${error.message}`);
 
                 retryAttempts++;
                 if (retryAttempts === this.maxRetryAttempts) {
                     throw new HttpException('Max retry attempts reached', HttpStatus.INTERNAL_SERVER_ERROR);
                 }
 
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await this.handleRetry(retryAttempts);
             }
         }
     }
 
     private generateUniqueFileName(originalFilename: string): string {
         const timestamp = new Date().getTime();
-        const randomString = Math.random().toString(36).substring(7);
-        const uniqueName = `${timestamp}_${randomString}_${originalFilename}`;
-        return uniqueName.replace(/[^a-zA-Z0-9_.]/g, "_");
+        const uuid = uuidv4();
+        const sanitizedOriginalFilename = originalFilename.replace(/[^a-zA-Z0-9_.]/g, "-");
+    
+        return `${timestamp}-${uuid}-${sanitizedOriginalFilename}`;
     }
-
+    
     private async enqueueFile(filePath: string): Promise<void> {
         return new Promise((resolve) => {
             this.processingQueue.push({ filePath, resolve });
@@ -94,30 +94,46 @@ export class RabbitmqService {
             this.currentWorkers++;
 
             const { filePath, resolve } = this.processingQueue.shift();
+            await this.processFile(filePath, resolve, 0);
 
-            try {
-                const readStream = createReadStream(filePath);
-                readStream.on('readable', () => {
-                    let chunk;
-                    while (null !== (chunk = readStream.read())) {
-                        this.channel.sendToQueue(Queues.FILE_QUEUE, chunk, { persistent: true });
-                    }
-                });
+            this.isProcessing = false;
+            this.currentWorkers--;
 
-                await new Promise((fileResolve, reject) => {
-                    readStream.on('end', fileResolve);
-                    readStream.on('error', reject);
-                });
+            this.processFiles();
+        }
+    }
 
-                resolve();
-            } catch (error) {
-                console.error('Error while processing file:', error);
-            } finally {
-                this.isProcessing = false;
-                this.currentWorkers--;
-
-                this.processFiles();
+    private async processFile(filePath: string, resolve: () => void, retryAttempts: number): Promise<void> {
+        try {
+            const readStream = createReadStream(filePath);
+            readStream.on('readable', () => {
+                let chunk;
+                while (null !== (chunk = readStream.read())) {
+                    this.channel.sendToQueue(Queues.FILE_QUEUE, chunk, { persistent: true });
+                }
+            });
+    
+            await new Promise((fileResolve, reject) => {
+                readStream.on('end', fileResolve);
+                readStream.on('error', reject);
+            });
+    
+            resolve();
+        } catch (error) {
+            console.error(`Error while processing file '${filePath}': ${error.message}`);
+    
+            if (retryAttempts < this.maxRetryAttempts) {
+                await this.handleRetry(retryAttempts);
+                await this.processFile(filePath, resolve, retryAttempts + 1);
+            } else {
+                console.error(`Max retry attempts reached for file processing: ${filePath}`);
             }
         }
+    }
+
+    private async handleRetry(retryAttempts: number): Promise<void> {
+        const backoffTime = Math.pow(2, retryAttempts) * 1000;
+        console.log(`Retrying file processing. Attempt ${retryAttempts + 1} of ${this.maxRetryAttempts}. Waiting for ${backoffTime} milliseconds.`);
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
     }
 }
