@@ -1,7 +1,7 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
 import { RabbitmqService } from "../rabbitmq/rabbitmq.service";
 import { IFileUploadService } from "./i-file-upload.service";
-import { HttpException, HttpStatus } from "@nestjs/common";
+import * as os from 'os';
 
 @Injectable()
 export class FileUploadService implements IFileUploadService {
@@ -15,13 +15,23 @@ export class FileUploadService implements IFileUploadService {
         try {
             const startTime = process.hrtime();
 
+            const cpuUsage = process.cpuUsage();
+            const memoryUsage = process.memoryUsage();
+            const totalMemory = os.totalmem();
+            const freeMemory = os.freemem();
+
             const result = await this.rabbitmqService.uploadFile(file);
 
             const endTime = process.hrtime(startTime);
             const elapsedTimeInSeconds = (endTime[0] + endTime[1] / 1e9).toFixed(2);
             const fileSizeInMB = file.size / (1024 * 1024);
 
-            this.logger.log(`File processed successfully. Size: ${fileSizeInMB.toFixed(2)} MB. Time taken: ${elapsedTimeInSeconds} seconds`);
+            this.logger.log(`File processed successfully. 
+            Size: ${fileSizeInMB.toFixed(2)} MB. 
+            Time taken: ${elapsedTimeInSeconds} seconds. 
+            CPU Usage: ${cpuUsage.user}μs user, ${cpuUsage.system}μs system. 
+            Memory Usage: ${memoryUsage.heapUsed / (1024 * 1024)} MB used, ${memoryUsage.heapTotal / (1024 * 1024)} MB total. 
+            System Memory: ${freeMemory / (1024 * 1024)} MB free of ${totalMemory / (1024 * 1024)} MB total.`);
 
             return result;
         } catch (error) {

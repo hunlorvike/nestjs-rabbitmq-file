@@ -2,7 +2,6 @@ import { Injectable, HttpException, HttpStatus } from "@nestjs/common";
 import { connect, Channel, Connection } from 'amqplib';
 import { Queues } from "../../shared/constrains/constrain";
 import { createReadStream, createWriteStream, existsSync, promises as fsPromises, mkdirSync } from 'fs';
-import { Express } from 'express';
 import { dirname, join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
