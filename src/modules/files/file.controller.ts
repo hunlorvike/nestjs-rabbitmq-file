@@ -2,7 +2,7 @@ import { Controller, Inject, Post, UseInterceptors, UploadedFile, HttpException,
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { Services } from '../../shared/constrains/constrain';
-import { FileUploadService } from './file-upload.service';
+import { FileService } from './file.service';
 import { FileUploadDto } from './dtos/file-upload.dto';
 import { MultiFileUploadDto } from './dtos/multi-file-upload.dto';
 import * as fs from 'fs';
@@ -12,11 +12,11 @@ import { createReadStream } from 'fs';
 
 @Controller('files')
 @ApiTags('files')
-export class FileUploadController {
-    private readonly logger = new Logger(FileUploadController.name);
+export class FileController {
+    private readonly logger = new Logger(FileController.name);
 
     constructor(
-        @Inject(Services.UPLOAD) private readonly uploadService: FileUploadService
+        @Inject(Services.UPLOAD) private readonly fileService: FileService
     ) { }
 
     @Post('upload')
@@ -32,7 +32,7 @@ export class FileUploadController {
                 throw new HttpException('File not provided', HttpStatus.BAD_REQUEST);
             }
 
-            const result = await this.uploadService.uploadFile(file);
+            const result = await this.fileService.uploadFile(file);
 
             return { data: result.filename, code: result.status, msg: result.message };
         } catch (error) {
@@ -53,7 +53,7 @@ export class FileUploadController {
                 throw new HttpException('Files not provided', HttpStatus.BAD_REQUEST);
             }
 
-            const results = await Promise.all(files.map(file => this.uploadService.uploadFile(file)));
+            const results = await Promise.all(files.map(file => this.fileService.uploadFile(file)));
 
             const data = results.map(result => result.filename);
 

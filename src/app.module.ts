@@ -3,12 +3,12 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { dataSourceOptions } from './database/data-source';
 import { RabbitmqModule } from './modules/rabbitmq/rabbitmq.module';
-import { FileUploadModule } from './modules/files/file-upload.module';
+import { FileModule } from './modules/files/file.module';
 import { ResponseInterceptor } from './shared/interceptors/response.interceptor';
 
 @Module({
 	imports: [
-		FileUploadModule,
+		FileModule,
 		RabbitmqModule,
 		TypeOrmModule.forRoot(dataSourceOptions),
 	],

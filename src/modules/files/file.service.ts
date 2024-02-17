@@ -1,11 +1,11 @@
 import { Injectable, Logger, HttpException, HttpStatus } from "@nestjs/common";
 import { RabbitmqService } from "../rabbitmq/rabbitmq.service";
-import { IFileUploadService } from "./i-file-upload.service";
+import { IFileService } from "./i-file.service";
 import * as os from 'os';
 
 @Injectable()
-export class FileUploadService implements IFileUploadService {
-    private readonly logger = new Logger(FileUploadService.name);
+export class FileService implements IFileService {
+    private readonly logger = new Logger(FileService.name);
 
     constructor(
         private readonly rabbitmqService: RabbitmqService,

@@ -1,21 +1,21 @@
 // file-upload.module.ts
 import { Module } from '@nestjs/common';
-import { FileUploadController } from './file-upload.controller';
+import { FileController } from './file.controller';
 import { Services } from '../../shared/constrains/constrain';
-import { FileUploadService } from './file-upload.service';
+import { FileService } from './file.service';
 import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 
 @Module({
 	imports: [],
-	controllers: [FileUploadController],
+	controllers: [FileController],
 	providers: [
-		FileUploadService,
+		FileService,
 		{
 			provide: Services.UPLOAD,
-			useClass: FileUploadService,
+			useClass: FileService,
 		},
 		RabbitmqService
 	],
-	exports: [FileUploadService],
+	exports: [FileService],
 })
-export class FileUploadModule { }
+export class FileModule { }
