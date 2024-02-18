@@ -12,7 +12,21 @@ import { RabbitmqService } from './rabbitmq.service';
 				transport: Transport.RMQ,
 				options: {
 					urls: ['amqp://rabbitmq_user:rabbitmq_password@localhost:5672'],
-					queue: Queues.FILE_QUEUE,
+					queue: Queues.UPLOAD,
+					queueOptions: {
+						durable: false,
+						noAck: false,
+						maxPriority: 10,
+						prefetchCount: 1,
+					},
+				},
+			},
+			{
+				name: 'RABBITMQ',
+				transport: Transport.RMQ,
+				options: {
+					urls: ['amqp://rabbitmq_user:rabbitmq_password@localhost:5672'],
+					queue: Queues.DOWNLOAD,
 					queueOptions: {
 						durable: false,
 						noAck: false,

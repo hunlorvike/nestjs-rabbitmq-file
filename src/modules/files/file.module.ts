@@ -9,13 +9,11 @@ import { RabbitmqService } from '../rabbitmq/rabbitmq.service';
 	imports: [],
 	controllers: [FileController],
 	providers: [
-		FileService,
 		{
-			provide: Services.UPLOAD,
+			provide: Services.FILE,
 			useClass: FileService,
 		},
 		RabbitmqService
 	],
-	exports: [FileService],
 })
 export class FileModule { }

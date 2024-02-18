@@ -5,6 +5,7 @@ export enum Queues {
 }
 
 export enum Services {
+    FILE = 'FILE',
     UPLOAD = 'UPLOAD',
     DOWNLOAD = 'DOWNLOAD',
     CLIENT_PROXY = 'CLIENT_PROXY'
