@@ -42,19 +42,22 @@ export class FileService implements IFileService {
     }
 
     async uploadBatchFiles(files: Express.Multer.File[]): Promise<{ filename: string, status: number, message: string }[]> {
-        const results = await Promise.all(files.map(async (file, index) => {
-            try {
-                const result = await this.uploadFile(file);
-                return { filename: result.filename, status: result.status, message: result.message };
-            } catch (error) {
-                console.error(`Error processing file ${index + 1}: ${error.message}`);
-                return null;
-            }
-        }));
-
-        return results.filter(result => result !== null);
+        try {
+            const uploadPromises = files.map(file => this.uploadFile(file));
+            const results = await Promise.all(uploadPromises);
+    
+            const successfulUploads = results.filter(result => result.status === HttpStatus.ACCEPTED);
+    
+            return successfulUploads.map(result => ({
+                filename: result.filename,
+                status: result.status,
+                message: result.message
+            }));
+        } catch (error) {
+            throw new HttpException(error.message || 'Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
-
+    
     async downloadFile(filename: string): Promise<Readable> {
         try {
             const startTime = process.hrtime();

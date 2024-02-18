@@ -43,19 +43,19 @@ export class RabbitmqService {
     private async processFiles(): Promise<void> {
         while (this.processingQueue.length > 0 && this.currentWorkers < this.maxConcurrentProcessing) {
             const batch = this.processingQueue.splice(0, this.maxConcurrentProcessing - this.currentWorkers);
-
+    
             const batchPromises = batch.map(({ filePath, resolve, isUpload }) =>
                 this.processFile(filePath, resolve, isUpload)
             );
-
+    
             await Promise.all(batchPromises);
         }
-
+    
         if (this.processingQueue.length > 0) {
             setImmediate(() => this.processFiles());
         }
     }
-
+    
     private async processFile(filePath: string, resolve: () => void, isUpload: boolean): Promise<void> {
         try {
             if (isUpload) {
@@ -88,23 +88,27 @@ export class RabbitmqService {
         }
     }
 
-    async uploadFiles(files: Express.Multer.File[]): Promise<{ message: string, status: number, filenames: string[] }> {
+    async uploadBatchFiles(files: Express.Multer.File[]): Promise<{ message: string, status: number, filenames: { filename: string, status: number, message: string }[] }> {
         try {
             const uploadPromises = files.map(file => this.uploadFile(file));
             const results = await Promise.all(uploadPromises);
-
+    
             const successfulUploads = results.filter(result => result.status === HttpStatus.ACCEPTED);
-
+    
             return {
                 message: "Batch file processing request received",
                 status: HttpStatus.ACCEPTED,
-                filenames: successfulUploads.map(result => result.filename)
+                filenames: successfulUploads.map(result => ({
+                    filename: result.filename,
+                    status: result.status,
+                    message: result.message
+                }))
             };
         } catch (error) {
             throw new HttpException(error.message || 'Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-
+        
     async uploadFile(file: Express.Multer.File): Promise<{ message: string, status: number, filename: string }> {
         let retryAttempts = 0;
 
