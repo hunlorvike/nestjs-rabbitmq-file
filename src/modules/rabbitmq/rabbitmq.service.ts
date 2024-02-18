@@ -1,12 +1,12 @@
 import { Injectable, HttpException, HttpStatus } from "@nestjs/common";
 import { connect, Channel, Connection } from 'amqplib';
 import { Queues } from "../../shared/constrains/constrain";
-import { createReadStream, createWriteStream, existsSync, promises as fsPromises, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { Readable } from "stream";
 import { generateUniqueFileName } from "../../shared/utils/generate-unique-filename";
-import PQueue from "p-queue";
+import * as dotenv from 'dotenv';
+import { createReadStream, existsSync, mkdirSync, createWriteStream, promises } from "fs";
+dotenv.config();
 
 @Injectable()
 export class RabbitmqService {
@@ -29,7 +29,7 @@ export class RabbitmqService {
 
     private async init(): Promise<void> {
         try {
-            this.connection = await connect('amqp://rabbitmq_user:rabbitmq_password@localhost:5672');
+            this.connection = await connect(process.env.RABBITMQ_URL);
             this.channel = await this.connection.createChannel();
 
             await this.channel.assertQueue(Queues.UPLOAD, { durable: false });
@@ -41,40 +41,40 @@ export class RabbitmqService {
     }
 
     private async processFiles(): Promise<void> {
-        if (!this.isProcessing && this.processingQueue.length > 0 && this.currentWorkers < this.maxConcurrentProcessing) {
-            this.isProcessing = true;
-            this.currentWorkers++;
+        while (this.processingQueue.length > 0 && this.currentWorkers < this.maxConcurrentProcessing) {
+            const batch = this.processingQueue.splice(0, this.maxConcurrentProcessing - this.currentWorkers);
 
-            const { filePath, resolve, isUpload } = this.processingQueue.shift();
+            const batchPromises = batch.map(({ filePath, resolve, isUpload }) =>
+                this.processFile(filePath, resolve, isUpload)
+            );
 
+            await Promise.all(batchPromises);
+        }
+
+        if (this.processingQueue.length > 0) {
+            setImmediate(() => this.processFiles());
+        }
+    }
+
+    private async processFile(filePath: string, resolve: () => void, isUpload: boolean): Promise<void> {
+        try {
             if (isUpload) {
-                await this.processUpload(filePath, resolve, 0);
+                await this.processUpload(filePath, resolve, this.maxRetryAttempts);
             } else {
-                await this.processDownload(filePath, resolve, 0);
+                await this.processDownload(filePath, resolve, this.maxRetryAttempts);
             }
-
-            this.isProcessing = false;
+        } catch (error) {
+            console.error(`Error processing file '${filePath}': ${error.message}`);
+        } finally {
             this.currentWorkers--;
-
-            this.processFiles();
+            resolve();
         }
     }
 
     private async processUpload(filePath: string, resolve: () => void, retryAttempts: number): Promise<void> {
         try {
             const readStream = createReadStream(filePath);
-            readStream.on('readable', () => {
-                let chunk;
-                while (null !== (chunk = readStream.read())) {
-                    this.channel.sendToQueue(Queues.FILE_QUEUE, chunk, { persistent: true });
-                }
-            });
-
-            await new Promise((fileResolve, reject) => {
-                readStream.on('end', fileResolve);
-                readStream.on('error', reject);
-            });
-
+            await this.sendStreamToQueue(Queues.UPLOAD, readStream);
             resolve();
         } catch (error) {
             console.error(`Error while processing file '${filePath}': ${error.message}`);
@@ -88,13 +88,22 @@ export class RabbitmqService {
         }
     }
 
-    private async enqueueFile(filePath: string, isUpload: boolean): Promise<void> {
-        return new Promise((resolve) => {
-            this.processingQueue.push({ filePath, resolve, isUpload });
-            this.processFiles();
-        });
-    }
+    async uploadFiles(files: Express.Multer.File[]): Promise<{ message: string, status: number, filenames: string[] }> {
+        try {
+            const uploadPromises = files.map(file => this.uploadFile(file));
+            const results = await Promise.all(uploadPromises);
 
+            const successfulUploads = results.filter(result => result.status === HttpStatus.ACCEPTED);
+
+            return {
+                message: "Batch file processing request received",
+                status: HttpStatus.ACCEPTED,
+                filenames: successfulUploads.map(result => result.filename)
+            };
+        } catch (error) {
+            throw new HttpException(error.message || 'Internal Server Error', HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
 
     async uploadFile(file: Express.Multer.File): Promise<{ message: string, status: number, filename: string }> {
         let retryAttempts = 0;
@@ -113,6 +122,8 @@ export class RabbitmqService {
                 writeStream.write(file.buffer);
                 writeStream.end();
 
+                await this.ensureConnection();
+
                 await this.enqueueFile(filePath, true);
 
                 return {
@@ -129,6 +140,25 @@ export class RabbitmqService {
                 }
 
                 await this.handleRetry(retryAttempts);
+            }
+        }
+    }
+
+
+    private async processDownload(filePath: string, resolve: () => void, retryAttempts: number): Promise<void> {
+        try {
+            const fileData = await promises.readFile(filePath);
+            const fileStream = Readable.from(fileData);
+            await this.sendStreamToQueue(Queues.DOWNLOAD, fileStream);
+            resolve();
+        } catch (error) {
+            console.error(`Error while processing download for file '${filePath}': ${error.message}`);
+
+            if (retryAttempts < this.maxRetryAttempts) {
+                await this.handleRetry(retryAttempts);
+                await this.processDownload(filePath, resolve, retryAttempts + 1);
+            } else {
+                console.error(`Max retry attempts reached for download processing: ${filePath}`);
             }
         }
     }
@@ -160,25 +190,31 @@ export class RabbitmqService {
         }
     }
 
-    private async processDownload(filePath: string, resolve: () => void, retryAttempts: number): Promise<void> {
-        try {
-            const fileStream = createReadStream(filePath, { highWaterMark: 64 * 1024 });
-
-            await new Promise((fileResolve, reject) => {
-                fileStream.on('end', fileResolve);
-                fileStream.on('error', reject);
+    private async sendStreamToQueue(queue: string, stream: Readable): Promise<void> {
+        return new Promise<void>((fileResolve, reject) => {
+            stream.on('data', (chunk) => {
+                this.channel.sendToQueue(queue, chunk, { persistent: true });
             });
 
-            resolve();
-        } catch (error) {
-            console.error(`Error while processing download for file '${filePath}': ${error.message}`);
+            stream.on('end', fileResolve);
+            stream.on('error', reject);
+        });
+    }
 
-            if (retryAttempts < this.maxRetryAttempts) {
-                await this.handleRetry(retryAttempts);
-                await this.processDownload(filePath, resolve, retryAttempts + 1);
-            } else {
-                console.error(`Max retry attempts reached for download processing: ${filePath}`);
+    private async enqueueFile(filePath: string, isUpload: boolean): Promise<void> {
+        return new Promise((resolve) => {
+            this.processingQueue.push({ filePath, resolve, isUpload });
+            this.processFiles();
+        });
+    }
+
+    private async ensureConnection(): Promise<void> {
+        try {
+            if (this.connection && typeof this.connection === 'object' && this.connection.connection && typeof this.connection.connection.isConnected === 'function' && !this.connection.connection.isConnected()) {
+                await this.init();
             }
+        } catch (error) {
+            console.error('Error while ensuring connection:', error);
         }
     }
 

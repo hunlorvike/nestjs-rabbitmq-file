@@ -1,10 +1,4 @@
-import {
-    NestInterceptor,
-    ExecutionContext,
-    CallHandler,
-    Injectable,
-    HttpStatus,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler, HttpStatus } from '@nestjs/common';
 import { map } from 'rxjs/operators';
 
 interface ResponseData {

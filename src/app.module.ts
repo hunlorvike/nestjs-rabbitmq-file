@@ -5,21 +5,21 @@ import { dataSourceOptions } from './database/data-source';
 import { RabbitmqModule } from './modules/rabbitmq/rabbitmq.module';
 import { FileModule } from './modules/files/file.module';
 import { ResponseInterceptor } from './shared/interceptors/response.interceptor';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
 	imports: [
+		ConfigModule.forRoot(),
 		FileModule,
 		RabbitmqModule,
 		TypeOrmModule.forRoot(dataSourceOptions),
 	],
-	controllers: [],
 	providers: [
 		{
 			provide: APP_INTERCEPTOR,
 			useClass: ResponseInterceptor,
 		},
 
-	],
-	exports: [],
+	]
 })
 export class AppModule { }

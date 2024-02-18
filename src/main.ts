@@ -1,14 +1,15 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { ResponseInterceptor } from './shared/interceptors/response.interceptor';
 import * as dotenv from 'dotenv';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
 dotenv.config();
 
 async function bootstrap() {
-	const PORT = process.env.PORT;
+	const { PORT, SWAGGER_PATH } = process.env;
+
 	const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
 	app.useGlobalInterceptors(new ResponseInterceptor());
@@ -29,10 +30,18 @@ async function bootstrap() {
 		.build();
 
 	const document = SwaggerModule.createDocument(app, config);
-	SwaggerModule.setup(`api/swagger`, app, document);
+	SwaggerModule.setup(SWAGGER_PATH, app, document);
 
+	app.enableCors();
 
-	// Start the application on port 3000
+	process.on('SIGTERM', () => {
+		app.close().then(() => {
+			console.log('Application closed gracefully.');
+			process.exit(0);
+		});
+	});
+
 	await app.listen(PORT, () => console.log(`Application running on port: ${PORT}`));
 }
+
 bootstrap();
